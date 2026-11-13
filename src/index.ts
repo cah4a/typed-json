@@ -18,10 +18,44 @@ function isRecord(data: unknown): data is Record<string, unknown> {
 }
 
 function invalid(expected: string, data: unknown): never {
-   throw new TypeError(`Expected ${expected}, got ${JSON.stringify(data)}`);
+   let received: string | undefined;
+   try {
+      received = JSON.stringify(data);
+   } catch {
+      received = typeof data === "bigint" ? `${data}n` : "[unserializable value]";
+   }
+   throw new TypeError(`Expected ${expected}, got ${received}`);
 }
 
-function createTypedJson<T>(item: Pick<TypedJson<T>, "parse" | "serialize">): TypedJson<T> {
+class PathError extends TypeError {
+   constructor(readonly path: readonly (string | number)[], cause: unknown) {
+      const location = path
+         .map((key, index) => {
+            if (typeof key === "number") return `[${key}]`;
+            return /^[A-Za-z_$][\w$]*$/.test(key)
+               ? `${index === 0 ? "" : "."}${key}`
+               : `[${JSON.stringify(key)}]`;
+         })
+         .join("");
+      const message = cause instanceof Error ? cause.message : String(cause);
+
+      super(`${location}: ${message}`, { cause });
+   }
+}
+
+function at<T>(key: string | number, operation: () => T): T {
+   try {
+      return operation();
+   } catch (error) {
+      throw error instanceof PathError
+         ? new PathError([key, ...error.path], error.cause)
+         : new PathError([key], error);
+   }
+}
+
+function createTypedJson<T>(
+   item: Pick<TypedJson<T>, "parse" | "serialize">,
+): TypedJson<T> {
    return {
       ...item,
       nullable() {
@@ -45,10 +79,14 @@ function createTypedJson<T>(item: Pick<TypedJson<T>, "parse" | "serialize">): Ty
                   return invalid("array", data);
                }
 
-               return data.map((value) => item.parse(value));
+               return data.map((value, index) =>
+                  at(index, () => item.parse(value)),
+               );
             },
             serialize(data) {
-               return data.map((value) => item.serialize(value));
+               return data.map((value, index) =>
+                  at(index, () => item.serialize(value)),
+               );
             },
          });
       },
@@ -61,6 +99,8 @@ const base64Pattern =
    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export const j = {
+   custom: createTypedJson,
+
    object<T extends Fields>(fields: T): TypedJson<Parsed<T>> {
       return createTypedJson({
          parse(data) {
@@ -71,7 +111,7 @@ export const j = {
             const parsed = Object.fromEntries(
                Object.entries(fields).map(([key, field]) => [
                   key,
-                  field.parse(data[key]),
+                  at(key, () => field.parse(data[key])),
                ]),
             );
 
@@ -83,7 +123,7 @@ export const j = {
             return Object.fromEntries(
                Object.entries(fields).map(([key, field]) => [
                   key,
-                  field.serialize(values[key]),
+                  at(key, () => field.serialize(values[key])),
                ]),
             );
          },
@@ -168,14 +208,18 @@ export const j = {
                return invalid(`tuple of ${items.length}`, data);
             }
 
-            const parsed = items.map((item, index) => item.parse(data[index]));
+            const parsed = items.map((item, index) =>
+               at(index, () => item.parse(data[index])),
+            );
 
             return parsed as Parsed<T>;
          },
          serialize(data) {
             const values: readonly unknown[] = data;
 
-            return items.map((item, index) => item.serialize(values[index]));
+            return items.map((item, index) =>
+               at(index, () => item.serialize(values[index])),
+            );
          },
       });
    },
@@ -190,7 +234,7 @@ export const j = {
             return Object.fromEntries(
                Object.entries(data).map(([key, value]): [string, T] => [
                   key,
-                  item.parse(value),
+                  at(key, () => item.parse(value)),
                ]),
             );
          },
@@ -198,7 +242,7 @@ export const j = {
             return Object.fromEntries(
                Object.entries(data).map(([key, value]) => [
                   key,
-                  item.serialize(value),
+                  at(key, () => item.serialize(value)),
                ]),
             );
          },

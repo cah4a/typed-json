@@ -52,6 +52,37 @@ Every schema exposes `.parse(unknown)`, `.serialize(value)`, `.array()`, and `.n
 
 ESM. Node.js 20+. `j.bytes()` uses Node's `Buffer`. No metadata envelope is stored; use the same schema when reading and writing.
 
+## Custom codecs
+
+Use `j.custom({ parse, serialize })` for your own types. It infers the parsed type and supports the same composition helpers as built-in schemas.
+
+```ts
+const url = j.custom({
+   parse(data) {
+      return new URL(j.string().parse(data));
+   },
+   serialize(data) {
+      return data.href;
+   },
+});
+
+const links = url.nullable().array(); // TypedJson<(URL | null)[]>
+```
+
+Custom codecs are responsible for validating input and returning JSON-compatible serialized values.
+
+## Errors
+
+Failures inside objects, arrays, tuples, and records include the full path during parsing and serialization:
+
+```ts
+const cart = j.object({ items: j.object({ price: j.number() }).array() });
+cart.parse({ items: [{ price: "oops" }] });
+// TypeError: items[0].price: Expected number, got "oops"
+```
+
+Keys containing punctuation use bracket notation, such as `prices["usd.total"]`. Nested failures, including custom codec errors, are wrapped in a `TypeError` with the original error available as `cause`. Root errors are passed through unchanged.
+
 ## Development
 
 ```sh
