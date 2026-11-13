@@ -1,0 +1,40 @@
+{
+  "name": "typed-json",
+  "version": "0.1.0",
+  "description": "Tiny schema-based JSON serialization with TypeScript inference and runtime validation.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cah4a/typed-json.git"
+  },
+  "homepage": "https://github.com/cah4a/typed-json#readme",
+  "bugs": { "url": "https://github.com/cah4a/typed-json/issues" },
+  "keywords": ["json", "typescript", "serialization", "schema", "validation", "bullmq"],
+  "author": "Sancha Kozlov",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
